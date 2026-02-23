@@ -1,9 +1,8 @@
 import api from "./api";
 
 export const insightService = {
-  async getAll() {
-    const response = await api.get("/api/Insights");
-    return response.data;
+  async getAll(params?: string) {
+    return api.get(`/api/Insights${params ?? ""}`);
   },
 
   async getById(id: string) {

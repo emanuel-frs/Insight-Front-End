@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { insightService } from "../services/insightService";
+import api from "../services/api";
 
 interface Insight {
   id: string;
@@ -10,24 +10,50 @@ interface Insight {
   createdAt: string;
 }
 
-export function useInsights() {
-  const [insights, setInsights] = useState<Insight[]>([]);
+const INSIGHT_TYPE_STR: Record<number, string> = {
+  0: "Psicologia",
+  1: "Financas",
+  2: "Saude",
+  3: "Tecnologia",
+  4: "Carreira",
+  5: "Relacionamentos",
+  6: "Produtividade",
+  7: "Autoconhecimento",
+};
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const shuffled = [...arr];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+export function useInsights(interestedTypes?: number[]) {
+  const [insights, setInsights] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetch() {
+    if (interestedTypes === undefined) return;
+
+    const types = interestedTypes;
+
+    async function load() {
       try {
-        const response = await insightService.getAll();
-        setInsights(response.data ?? []);
-      } catch {
-        setError("Não foi possível carregar os insights.");
+        const params = types.length
+          ? "?" + types.map((t) => `types=${INSIGHT_TYPE_STR[t]}`).join("&")
+          : "";
+        const res = await api.get(`/api/Insights${params}`);
+        setInsights(shuffleArray(res.data.data ?? []));
+      } catch (e) {
+        console.error("Erro ao buscar insights:", e);
       } finally {
         setIsLoading(false);
       }
     }
-    fetch();
-  }, []);
+    load();
+  }, [JSON.stringify(interestedTypes)]);
 
-  return { insights, isLoading, error };
+  return { insights, isLoading };
 }
