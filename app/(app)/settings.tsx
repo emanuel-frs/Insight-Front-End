@@ -1,23 +1,16 @@
 import { useRouter } from "expo-router";
-import { FaCloudMoon, FaLeaf, FaMusic, FaSun } from "react-icons/fa";
+import { FaCloudMoon, FaSun } from "react-icons/fa";
 import { PiMonitorFill } from "react-icons/pi";
-import { TbWind } from "react-icons/tb";
 
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Easing,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLanguage } from "../../src/contexts/LanguageContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
@@ -25,7 +18,6 @@ import { useUserConfig } from "../../src/hooks/useUserConfig";
 import { TranslationKey } from "../../src/i18n/translations";
 import {
   ALL_INSIGHT_TYPES,
-  AudioTypeEnum,
   InsightTypeEnum,
   LanguageEnum,
   ThemeEnum,
@@ -42,44 +34,9 @@ const INSIGHT_TYPE_KEYS: Record<InsightTypeEnum, TranslationKey> = {
   [InsightTypeEnum.Autoconhecimento]: "typeAutoconhecimento",
 };
 
-function ToggleSwitch({
-  value,
-  onValueChange,
-}: {
-  value: boolean;
-  onValueChange: (v: boolean) => void;
-}) {
-  const { theme } = useTheme();
-  const translateX = useSharedValue(value ? 22 : 2);
-
-  useEffect(() => {
-    translateX.value = withTiming(value ? 22 : 2, {
-      duration: 200,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, [value]);
-
-  const thumbStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }));
-
-  return (
-    <TouchableOpacity
-      onPress={() => onValueChange(!value)}
-      activeOpacity={0.8}
-      style={[
-        styles.switchTrack,
-        { backgroundColor: value ? "#6C63FF" : theme.inputBorder },
-      ]}
-    >
-      <Animated.View style={[styles.switchThumb, thumbStyle]} />
-    </TouchableOpacity>
-  );
-}
-
 export default function SettingsScreen() {
   const { theme } = useTheme();
-  const { t } = useLanguage();
+  const { t, setLanguage } = useLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { config, isLoading, updateConfig } = useUserConfig();
@@ -89,10 +46,6 @@ export default function SettingsScreen() {
   const [selectedTheme, setSelectedTheme] = useState<ThemeEnum>(
     ThemeEnum.System,
   );
-  const [audioEnabled, setAudioEnabled] = useState(false);
-  const [audioType, setAudioType] = useState<AudioTypeEnum>(
-    AudioTypeEnum.Ambiente,
-  );
   const [selectedLanguage, setSelectedLanguage] = useState<LanguageEnum>(
     LanguageEnum.PortuguesBR,
   );
@@ -101,8 +54,6 @@ export default function SettingsScreen() {
     if (config) {
       setSelectedTypes(config.interestedInsightTypes ?? []);
       setSelectedTheme(config.theme ?? ThemeEnum.System);
-      setAudioEnabled(config.audioEnabled ?? false);
-      setAudioType(config.audioType ?? AudioTypeEnum.Ambiente);
       setSelectedLanguage(config.language ?? LanguageEnum.PortuguesBR);
     }
   }, [config]);
@@ -113,16 +64,22 @@ export default function SettingsScreen() {
     );
   }
 
+  const LANGUAGE_MAP: Record<LanguageEnum, Parameters<typeof setLanguage>[0]> =
+    {
+      [LanguageEnum.PortuguesBR]: "PortuguesBR",
+      [LanguageEnum.English]: "English",
+      [LanguageEnum.Spanish]: "Spanish",
+    };
+
   async function save() {
     setSaving(true);
     try {
       await updateConfig({
         interestedInsightTypes: selectedTypes,
         theme: selectedTheme,
-        audioEnabled,
-        audioType: audioEnabled ? audioType : undefined,
         language: selectedLanguage,
       });
+      setLanguage(LANGUAGE_MAP[selectedLanguage]);
       router.replace("/(app)");
     } finally {
       setSaving(false);
@@ -161,7 +118,7 @@ export default function SettingsScreen() {
           </Text>
         </View>
 
-        {/* Tipos de interesse */}
+        {/* ── Interesses ── */}
         <Text style={[styles.sectionTitle, { color: theme.text }]}>
           {t("yourInterests")}
         </Text>
@@ -196,14 +153,14 @@ export default function SettingsScreen() {
           })}
         </View>
 
-        {/* Aparência */}
+        {/* ── Aparência ── */}
         <Text style={[styles.sectionTitle, { color: theme.text }]}>
           {t("appearance")}
         </Text>
         <Text style={[styles.sectionSubtitle, { color: theme.textMuted }]}>
           {t("appearanceSubtitle")}
         </Text>
-        <View style={styles.themeOptions}>
+        <View style={styles.optionsRow}>
           {[
             {
               value: ThemeEnum.Light,
@@ -226,7 +183,7 @@ export default function SettingsScreen() {
               <TouchableOpacity
                 key={opt.value}
                 style={[
-                  styles.themeOption,
+                  styles.optionBtn,
                   {
                     backgroundColor: selected ? "#6C63FF" : theme.card,
                     borderColor: selected ? "#6C63FF" : theme.inputBorder,
@@ -240,7 +197,7 @@ export default function SettingsScreen() {
                 />
                 <Text
                   style={[
-                    styles.themeLabel,
+                    styles.optionLabel,
                     { color: selected ? "#fff" : theme.text },
                   ]}
                 >
@@ -251,82 +208,50 @@ export default function SettingsScreen() {
           })}
         </View>
 
-        {/* Áudio */}
-        <View style={styles.audioHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>
-              {t("ambientAudio")}
-            </Text>
-            <Text style={[styles.sectionSubtitle, { color: theme.textMuted }]}>
-              {t("ambientAudioSubtitle")}
-            </Text>
-          </View>
-          <ToggleSwitch value={audioEnabled} onValueChange={setAudioEnabled} />
-        </View>
-
-        {audioEnabled && (
-          <View style={styles.themeOptions}>
-            {[
-              {
-                value: AudioTypeEnum.Musica,
-                labelKey: "audioMusic" as const,
-                Icon: FaMusic,
-              },
-              {
-                value: AudioTypeEnum.Asmr,
-                labelKey: "audioAsmr" as const,
-                Icon: TbWind,
-              },
-              {
-                value: AudioTypeEnum.Ambiente,
-                labelKey: "audioAmbient" as const,
-                Icon: FaLeaf,
-              },
-            ].map((opt) => {
-              const selected = audioType === opt.value;
-              return (
-                <TouchableOpacity
-                  key={opt.value}
-                  style={[
-                    styles.themeOption,
-                    {
-                      backgroundColor: selected ? "#6C63FF" : theme.card,
-                      borderColor: selected ? "#6C63FF" : theme.inputBorder,
-                    },
-                  ]}
-                  onPress={() => setAudioType(opt.value)}
-                >
-                  <opt.Icon
-                    size={16}
-                    color={selected ? "#fff" : theme.textMuted}
-                  />
-                  <Text
-                    style={[
-                      styles.themeLabel,
-                      { color: selected ? "#fff" : theme.text },
-                    ]}
-                  >
-                    {t(opt.labelKey)}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
-
-        {/* Idioma */}
-        <View style={[styles.audioHeader, { marginTop: audioEnabled ? 0 : 8 }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>
-              {t("language")}
-            </Text>
-            <Text style={[styles.sectionSubtitle, { color: theme.textMuted }]}>
-              {t("languageSubtitle")}
-            </Text>
+        {/* ── Áudio — Em breve ── */}
+        <View
+          style={[
+            styles.comingSoonCard,
+            { backgroundColor: theme.card, borderColor: theme.inputBorder },
+          ]}
+        >
+          <View style={styles.comingSoonHeader}>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={[
+                  styles.sectionTitle,
+                  { color: theme.text, marginBottom: 2 },
+                ]}
+              >
+                {t("ambientAudio")}
+              </Text>
+              <Text
+                style={[
+                  styles.sectionSubtitle,
+                  { color: theme.textMuted, marginBottom: 0 },
+                ]}
+              >
+                {t("ambientAudioSubtitle")}
+              </Text>
+            </View>
+            <View style={[styles.soonBadge, { backgroundColor: "#6C63FF22" }]}>
+              <Text style={[styles.soonBadgeText, { color: "#6C63FF" }]}>
+                {t("comingSoon")}
+              </Text>
+            </View>
           </View>
         </View>
 
-        <View style={styles.themeOptions}>
+        {/* ── Idioma ── */}
+        <Text
+          style={[styles.sectionTitle, { color: theme.text, marginTop: 32 }]}
+        >
+          {t("language")}
+        </Text>
+        <Text style={[styles.sectionSubtitle, { color: theme.textMuted }]}>
+          {t("languageSubtitle")}
+        </Text>
+        <View style={styles.optionsRow}>
           {[
             { value: LanguageEnum.PortuguesBR, label: "Português", flag: "🇧🇷" },
             { value: LanguageEnum.English, label: "English", flag: "🇺🇸" },
@@ -337,7 +262,7 @@ export default function SettingsScreen() {
               <TouchableOpacity
                 key={opt.value}
                 style={[
-                  styles.themeOption,
+                  styles.optionBtn,
                   {
                     backgroundColor: selected ? "#6C63FF" : theme.card,
                     borderColor: selected ? "#6C63FF" : theme.inputBorder,
@@ -348,7 +273,7 @@ export default function SettingsScreen() {
                 <Text style={{ fontSize: 18 }}>{opt.flag}</Text>
                 <Text
                   style={[
-                    styles.themeLabel,
+                    styles.optionLabel,
                     { color: selected ? "#fff" : theme.text },
                   ]}
                 >
@@ -359,7 +284,7 @@ export default function SettingsScreen() {
           })}
         </View>
 
-        {/* Botão salvar */}
+        {/* ── Salvar ── */}
         <TouchableOpacity
           style={[styles.saveButton, saving && { opacity: 0.6 }]}
           onPress={save}
@@ -384,6 +309,8 @@ const styles = StyleSheet.create({
   back: { marginBottom: 16 },
   backText: { fontSize: 15 },
   title: { fontSize: 28, fontWeight: "700" },
+  sectionTitle: { fontSize: 18, fontWeight: "700", marginBottom: 4 },
+  sectionSubtitle: { fontSize: 14, lineHeight: 20, marginBottom: 12 },
   typesGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -396,38 +323,13 @@ const styles = StyleSheet.create({
     borderRadius: 100,
     borderWidth: 2,
   },
-  typeChipText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  saveButton: {
-    backgroundColor: "#6C63FF",
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  saveText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  sectionSubtitle: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  themeOptions: {
+  typeChipText: { fontSize: 14, fontWeight: "600" },
+  optionsRow: {
     flexDirection: "row",
     gap: 8,
     marginBottom: 32,
   },
-  themeOption: {
+  optionBtn: {
     flex: 1,
     flexDirection: "column",
     alignItems: "center",
@@ -438,29 +340,36 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     gap: 6,
   },
-  themeLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    textAlign: "center",
+  optionLabel: { fontSize: 12, fontWeight: "600", textAlign: "center" },
+  comingSoonCard: {
+    borderRadius: 16,
+    borderWidth: 2,
+    padding: 16,
+    opacity: 0.6,
   },
-  audioHeader: {
+  comingSoonHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 0,
-    marginBottom: 12,
+    justifyContent: "space-between",
     gap: 12,
   },
-  switchTrack: {
-    width: 48,
-    height: 28,
+  soonBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  soonBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  saveButton: {
+    backgroundColor: "#6C63FF",
     borderRadius: 14,
-    paddingLeft: 2,
-    justifyContent: "center",
+    paddingVertical: 16,
+    alignItems: "center",
+    marginTop: 8,
   },
-  switchThumb: {
-    width: 20,
-    height: 20,
-    borderRadius: 12,
-    backgroundColor: "#fff",
-  },
+  saveText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 });

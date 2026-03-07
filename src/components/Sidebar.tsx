@@ -1,5 +1,6 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ImHome } from "react-icons/im";
 import { IoMdHeart } from "react-icons/io";
 import { IoPersonCircle } from "react-icons/io5";
@@ -25,6 +26,7 @@ import Animated, {
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import { useTheme } from "../contexts/ThemeContext";
+import { SidebarTutorial } from "./SidebarTutorial";
 
 const { width: SW } = Dimensions.get("window");
 const SIDEBAR_WIDTH = SW * 0.78;
@@ -40,6 +42,16 @@ export function Sidebar({ visible, onClose }: Props) {
   const { t } = useLanguage();
   const router = useRouter();
   const translateX = useSharedValue(-SIDEBAR_WIDTH);
+  const [tutorialStep, setTutorialStep] = useState<number | null>(null);
+
+  // Verifica se deve mostrar tutorial da sidebar na primeira abertura
+  useEffect(() => {
+    if (visible) {
+      AsyncStorage.getItem("@insight:sidebar_tutorial_done").then((done) => {
+        if (!done) setTutorialStep(0);
+      });
+    }
+  }, [visible]);
 
   useEffect(() => {
     translateX.value = withTiming(visible ? 0 : -SIDEBAR_WIDTH, {
@@ -88,13 +100,25 @@ export function Sidebar({ visible, onClose }: Props) {
     logout();
   }
 
+  async function dismissTutorial() {
+    setTutorialStep(null);
+    await AsyncStorage.setItem("@insight:sidebar_tutorial_done", "true");
+  }
+
+  function handleTutorialNext() {
+    if (tutorialStep !== null && tutorialStep < 4) {
+      setTutorialStep(tutorialStep + 1);
+    } else {
+      dismissTutorial();
+    }
+  }
+
   const items = [
     { labelKey: "home" as const, Icon: ImHome, path: "/(app)" },
     {
       labelKey: "favorites" as const,
       Icon: IoMdHeart,
       path: "/(app)/favorites",
-      disabled: true,
     },
     {
       labelKey: "settings" as const,
@@ -105,7 +129,6 @@ export function Sidebar({ visible, onClose }: Props) {
       labelKey: "profile" as const,
       Icon: IoPersonCircle,
       path: "/(app)/profile",
-      disabled: true,
     },
   ];
 
@@ -137,19 +160,13 @@ export function Sidebar({ visible, onClose }: Props) {
             {items.map((item) => (
               <TouchableOpacity
                 key={item.labelKey}
-                style={[styles.item, item.disabled && { opacity: 0.35 }]}
-                onPress={() => !item.disabled && navigate(item.path)}
-                disabled={item.disabled}
+                style={styles.item}
+                onPress={() => navigate(item.path)}
               >
                 <item.Icon size={20} color={theme.textMuted} />
                 <Text style={[styles.itemLabel, { color: theme.text }]}>
                   {t(item.labelKey)}
                 </Text>
-                {item.disabled && (
-                  <Text style={[styles.soon, { color: theme.textMuted }]}>
-                    {t("comingSoon")}
-                  </Text>
-                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -160,6 +177,15 @@ export function Sidebar({ visible, onClose }: Props) {
               {t("logout")}
             </Text>
           </TouchableOpacity>
+
+          {/* Tutorial overlay dentro da sidebar */}
+          {visible && tutorialStep !== null && (
+            <SidebarTutorial
+              step={tutorialStep}
+              onNext={handleTutorialNext}
+              onDismiss={dismissTutorial}
+            />
+          )}
         </Animated.View>
       </GestureDetector>
     </>
@@ -188,6 +214,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 20,
+    overflow: "hidden",
   },
   items: {
     flex: 1,
@@ -201,21 +228,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 14,
   },
-  itemIcon: {
-    fontSize: 18,
-    width: 24,
-    textAlign: "center",
-  },
   itemLabel: {
     fontSize: 16,
     fontWeight: "500",
     flex: 1,
-  },
-  soon: {
-    fontSize: 10,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
   },
   logout: {
     flexDirection: "row",

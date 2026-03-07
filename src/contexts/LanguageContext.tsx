@@ -1,10 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Localization from "expo-localization";
 import {
-    createContext,
-    ReactNode,
-    useContext,
-    useEffect,
-    useState,
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useState,
 } from "react";
 import { Language, TranslationKey, translations } from "../i18n/translations";
 
@@ -16,14 +17,25 @@ interface LanguageContextData {
 
 const LANGUAGE_STORAGE_KEY = "@insight:language";
 
+function detectDeviceLanguage(): Language {
+  const locale = Localization.getLocales()[0]?.languageTag ?? "pt";
+  if (locale.startsWith("pt")) return "PortuguesBR";
+  if (locale.startsWith("es")) return "Spanish";
+  return "English";
+}
+
 const LanguageContext = createContext<LanguageContextData>(
   {} as LanguageContextData,
 );
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Language>("PortuguesBR");
+  // Começa com o idioma do dispositivo para evitar flash de idioma errado
+  const [language, setLanguageState] = useState<Language>(
+    detectDeviceLanguage(),
+  );
 
   useEffect(() => {
+    // Se o usuário já escolheu um idioma antes, usa esse
     AsyncStorage.getItem(LANGUAGE_STORAGE_KEY).then((saved) => {
       if (saved) setLanguageState(saved as Language);
     });
@@ -35,7 +47,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }
 
   function t(key: TranslationKey): string {
-    return translations[language][key] ?? translations.PortuguesBR[key] ?? key;
+    return (
+      (translations[language] as any)[key] ??
+      (translations.PortuguesBR as any)[key] ??
+      key
+    );
   }
 
   return (

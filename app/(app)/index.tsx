@@ -1,4 +1,6 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -26,15 +28,17 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { HomeTutorial } from "../../src/components/HomeTutorial";
+import { InsightCard } from "../../src/components/InsightCard";
 import { RichText } from "../../src/components/RichText";
 import { Sidebar } from "../../src/components/Sidebar";
-
-import { useUserConfig } from "@/src/hooks/useUserConfig";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { InsightCard } from "../../src/components/InsightCard";
 import { useLanguage } from "../../src/contexts/LanguageContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { useInsights } from "../../src/hooks/useInsights";
+import { useUserConfig } from "../../src/hooks/useUserConfig";
+import { favoriteService } from "../../src/services/favoriteService";
+import { insightViewService } from "../../src/services/insightViewService";
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const CARD_HEIGHT = SH * 0.68;
@@ -85,6 +89,7 @@ const typeImages: Record<string, any[]> = {
   ],
 };
 
+// ─── SwipeableCard ────────────────────────────────────────────────
 function SwipeableCard({
   item,
   cardRef,
@@ -155,6 +160,7 @@ function SwipeableCard({
   );
 }
 
+// ─── BackCard ─────────────────────────────────────────────────────
 function BackCard({
   item,
   index,
@@ -204,6 +210,7 @@ function BackCard({
   );
 }
 
+// ─── ExpandedCard ─────────────────────────────────────────────────
 function ExpandedCard({
   item,
   originX,
@@ -225,8 +232,11 @@ function ExpandedCard({
   const animProgress = useSharedValue(0);
   const scrollRef = useRef<ScrollView>(null);
   const [scrollEnabled, setScrollEnabled] = useState(false);
+  const openedAt = useRef<number>(Date.now());
 
   useEffect(() => {
+    insightViewService.recordView(item.id, 0);
+    openedAt.current = Date.now();
     animProgress.value = withTiming(
       1,
       { duration: 420, easing: Easing.out(Easing.cubic) },
@@ -235,6 +245,12 @@ function ExpandedCard({
       },
     );
   }, []);
+
+  function handleClose() {
+    const seconds = Math.floor((Date.now() - openedAt.current) / 1000);
+    insightViewService.recordView(item.id, seconds);
+    onClose();
+  }
 
   const dragY = useSharedValue(0);
   const gesture = Gesture.Pan()
@@ -246,7 +262,7 @@ function ExpandedCard({
         dragY.value = withTiming(
           SH,
           { duration: 320, easing: Easing.in(Easing.cubic) },
-          () => runOnJS(onClose)(),
+          () => runOnJS(handleClose)(),
         );
       } else {
         dragY.value = withSpring(0, { damping: 20, stiffness: 120 });
@@ -277,7 +293,7 @@ function ExpandedCard({
     ),
   }));
 
-  const imgs = (typeImages as Record<string, any[]>)[item.insightType];
+  const imgs = typeImages[item.insightType];
   const seed = item.id.charCodeAt(item.id.length - 1) % 3;
   const image = imgs?.[seed];
 
@@ -312,7 +328,6 @@ function ExpandedCard({
               />
             </View>
           )}
-
           <Animated.View
             style={[
               styles.expandedBody,
@@ -346,14 +361,15 @@ function ExpandedCard({
   );
 }
 
+// ─── HomeScreen ───────────────────────────────────────────────────
 export default function HomeScreen() {
   const { theme, isDark } = useTheme();
   const { t } = useLanguage();
+  const router = useRouter();
   const { config, isLoading: configLoading } = useUserConfig();
   const { insights, isLoading: insightsLoading } = useInsights(
     configLoading ? undefined : (config?.interestedInsightTypes ?? []),
   );
-
   const isLoading = configLoading || insightsLoading;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -361,8 +377,10 @@ export default function HomeScreen() {
   const [removed, setRemoved] = useState<any[]>([]);
   const [advancing, setAdvancing] = useState(false);
   const [expandedItem, setExpandedItem] = useState<any>(null);
-  const insets = useSafeAreaInsets();
 
+  const [tutorialStep, setTutorialStep] = useState<number | null>(null);
+
+  const insets = useSafeAreaInsets();
   const [cardOrigin, setCardOrigin] = useState({
     x: 0,
     y: 0,
@@ -372,13 +390,38 @@ export default function HomeScreen() {
   const cardRef = useRef<View>(null);
 
   useEffect(() => {
+    async function checkFirstTime() {
+      const onboardingDone = await AsyncStorage.getItem(
+        "@insight:onboarding_done",
+      );
+      if (!onboardingDone) {
+        router.replace("/(app)/onboarding");
+        return;
+      }
+      const tutorialDone = await AsyncStorage.getItem("@insight:tutorial_done");
+      if (!tutorialDone) {
+        setTutorialStep(0);
+      }
+    }
+    checkFirstTime();
+  }, []);
+
+  useEffect(() => {
     if (insights.length > 0) setQueue(insights);
   }, [insights]);
 
   function removeTop(action: string, item: any) {
-    console.log(`[${action}]:`, item.title);
     setAdvancing(true);
     setRemoved((prev) => [...prev, item]);
+
+    if (action === "favoritar") {
+      favoriteService.add(item.id).catch((e) => console.warn("[Favorite]", e));
+    }
+
+    if (action === "ignorar") {
+      insightViewService.recordView(item.id, 0);
+    }
+
     setTimeout(() => {
       setQueue((prev) => {
         const next = prev.slice(1);
@@ -396,8 +439,17 @@ export default function HomeScreen() {
     });
   }
 
-  function handleCloseExpanded() {
-    setExpandedItem(null);
+  async function dismissTutorial() {
+    setTutorialStep(null);
+    await AsyncStorage.setItem("@insight:tutorial_done", "true");
+  }
+
+  function handleTutorialNext() {
+    if (tutorialStep !== null && tutorialStep < 2) {
+      setTutorialStep(tutorialStep + 1);
+    } else {
+      dismissTutorial();
+    }
   }
 
   if (isLoading) {
@@ -506,11 +558,21 @@ export default function HomeScreen() {
             originY={cardOrigin.y}
             originW={cardOrigin.w}
             originH={cardOrigin.h}
-            onClose={handleCloseExpanded}
+            onClose={() => setExpandedItem(null)}
           />
         </>
       )}
+
       <Sidebar visible={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      {/* Tutorial overlay */}
+      {tutorialStep !== null && (
+        <HomeTutorial
+          step={tutorialStep}
+          onNext={handleTutorialNext}
+          onDismiss={dismissTutorial}
+        />
+      )}
     </GestureHandlerRootView>
   );
 }
@@ -524,12 +586,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
   },
-  menuButton: {
-    position: "absolute",
-    left: 0,
-    padding: 20,
-    paddingTop: 40,
-  },
+  menuButton: { position: "absolute", left: 0, padding: 20, paddingTop: 40 },
   menuIcon: { fontSize: 40, fontWeight: "300" },
   logo: { width: 100, height: 100, marginBottom: -40 },
   stack: {
@@ -544,14 +601,6 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     height: CARD_HEIGHT,
   },
-  expandedContainer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 100,
-  },
   handleBar: {
     position: "absolute",
     left: 0,
@@ -559,19 +608,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     zIndex: 10,
   },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-  },
-  expandedImageWrapper: {
-    width: "100%",
-    height: 300,
-  },
-  expandedImage: {
-    width: "100%",
-    height: "100%",
-  },
+  handle: { width: 40, height: 4, borderRadius: 2 },
+  expandedImageWrapper: { width: "100%", height: 300 },
+  expandedImage: { width: "100%", height: "100%" },
   imageOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(11,16,31,0.72)",
@@ -599,10 +638,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 32,
     marginBottom: 20,
-  },
-  expandedContent: {
-    fontSize: 16,
-    lineHeight: 26,
   },
   imageGradient: {
     position: "absolute",

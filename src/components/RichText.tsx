@@ -21,7 +21,6 @@ export function RichText({
         const trimmed = line.trim();
         if (!trimmed) return <View key={i} style={{ height: 8 }} />;
 
-        // Bullet: *   **Título:** texto
         const bulletMatch = trimmed.match(/^\*\s+\*\*(.+?)\*\*[:\s]*(.*)/);
         if (bulletMatch) {
           return (
@@ -38,7 +37,6 @@ export function RichText({
           );
         }
 
-        // Lista numerada: 1.  **Título:** texto
         const numberedMatch = trimmed.match(
           /^(\d+)\.\s+\*\*(.+?)\*\*[:\s]*(.*)/,
         );
@@ -59,7 +57,6 @@ export function RichText({
           );
         }
 
-        // Linha normal com possível bold/italic inline
         return (
           <Text
             key={i}
@@ -84,7 +81,6 @@ function renderInline(
 ): React.ReactNode {
   if (!text) return null;
 
-  // Divide por **bold** e *italic*
   const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {

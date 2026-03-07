@@ -29,9 +29,8 @@ const TOKEN_KEY = "@insight:token";
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isReady, setIsReady] = useState(false); // ← enquanto false, app não redireciona
+  const [isReady, setIsReady] = useState(false);
 
-  // Recupera token salvo ao iniciar o app
   useEffect(() => {
     async function loadToken() {
       try {
