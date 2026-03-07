@@ -44,6 +44,3 @@ yarn-error.*
 
 # Metro bundler cache
 .metro-health-check*
-
-# EAS
-.easignore
