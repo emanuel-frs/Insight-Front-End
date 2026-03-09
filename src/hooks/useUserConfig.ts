@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { Language } from "../i18n/translations";
+import { isNetworkError } from "../services/api";
 import { userConfigService } from "../services/userConfigService";
 import {
   AudioTypeEnum,
@@ -73,38 +74,51 @@ export function useUserConfig() {
   const { token } = useAuth();
   const [config, setConfig] = useState<UserConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [networkError, setNetworkError] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!token) {
       setIsLoading(false);
       return;
     }
-    async function load() {
-      try {
-        const data = await userConfigService.get();
-        const parsed = parseConfig(data);
-        setConfig(parsed);
-        setThemePreference(THEME_MAP[parsed.theme]);
-        setLanguage(LANGUAGE_MAP[parsed.language ?? LanguageEnum.PortuguesBR]);
-      } catch {
-        try {
-          const created = await userConfigService.create({
-            language: LanguageEnum.PortuguesBR,
-            theme: ThemeEnum.System,
-            audioEnabled: false,
-            audioType: AudioTypeEnum.Ambiente,
-            interestedInsightTypes: [],
-          });
-          setConfig(parseConfig(created));
-        } catch (e) {
-          console.error("[UserConfig] POST falhou:", e);
-        }
-      } finally {
-        setIsLoading(false);
+    setIsLoading(true);
+    setNetworkError(false);
+    try {
+      const data = await userConfigService.get();
+      const parsed = parseConfig(data);
+      setConfig(parsed);
+      setThemePreference(THEME_MAP[parsed.theme]);
+      setLanguage(LANGUAGE_MAP[parsed.language ?? LanguageEnum.PortuguesBR]);
+    } catch (e) {
+      if (isNetworkError(e)) {
+        setNetworkError(true);
+        return;
       }
+      // Config não existe ainda — tenta criar
+      try {
+        const created = await userConfigService.create({
+          language: LanguageEnum.PortuguesBR,
+          theme: ThemeEnum.System,
+          audioEnabled: false,
+          audioType: AudioTypeEnum.Ambiente,
+          interestedInsightTypes: [],
+        });
+        setConfig(parseConfig(created));
+      } catch (createErr) {
+        if (isNetworkError(createErr)) {
+          setNetworkError(true);
+        } else {
+          console.error("[UserConfig] POST falhou:", createErr);
+        }
+      }
+    } finally {
+      setIsLoading(false);
     }
-    load();
   }, [token]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   async function updateConfig(payload: Partial<UserConfig>) {
     if (!config) return;
@@ -125,5 +139,5 @@ export function useUserConfig() {
     }
   }
 
-  return { config, isLoading, updateConfig };
+  return { config, isLoading, updateConfig, networkError, reload: load };
 }

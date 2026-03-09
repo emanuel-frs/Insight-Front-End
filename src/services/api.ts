@@ -1,13 +1,10 @@
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 
 /**
  * URL base da API backend.
  *
  * Configure no arquivo .env na raiz do projeto:
  *   EXPO_PUBLIC_API_URL=http://SEU_IP:5196
- *
- * ⚠️  Não use "localhost" — emuladores e dispositivos físicos
- *     não conseguem resolver o localhost do seu computador.
  *
  * Android emulator → http://10.0.2.2:5196
  * Dispositivo físico → http://192.168.x.x:5196  (IP local da sua máquina)
@@ -32,5 +29,21 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    if (!error.response) {
+      const networkError = new Error("NETWORK_ERROR");
+      networkError.name = "NETWORK_ERROR";
+      return Promise.reject(networkError);
+    }
+    return Promise.reject(error);
+  },
+);
+
+export function isNetworkError(error: unknown): boolean {
+  return error instanceof Error && error.name === "NETWORK_ERROR";
+}
 
 export default api;

@@ -31,14 +31,15 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { HomeTutorial } from "../../src/components/HomeTutorial";
 import { InsightCard } from "../../src/components/InsightCard";
+import { NetworkErrorScreen } from "../../src/components/NetworkErrorScreen";
 import { RichText } from "../../src/components/RichText";
 import { Sidebar } from "../../src/components/Sidebar";
 import { useLanguage } from "../../src/contexts/LanguageContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
-import { useInsights } from "../../src/hooks/useInsights";
 import { useUserConfig } from "../../src/hooks/useUserConfig";
 import { favoriteService } from "../../src/services/favoriteService";
 import { insightViewService } from "../../src/services/insightViewService";
+import { useInsights } from "../../src/services/useInsights";
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const CARD_HEIGHT = SH * 0.68;
@@ -366,18 +367,28 @@ export default function HomeScreen() {
   const { theme, isDark } = useTheme();
   const { t } = useLanguage();
   const router = useRouter();
-  const { config, isLoading: configLoading } = useUserConfig();
-  const { insights, isLoading: insightsLoading } = useInsights(
+  const {
+    config,
+    isLoading: configLoading,
+    networkError: configNetworkError,
+    reload: reloadConfig,
+  } = useUserConfig();
+  const {
+    insights,
+    isLoading: insightsLoading,
+    networkError: insightsNetworkError,
+    reload: reloadInsights,
+  } = useInsights(
     configLoading ? undefined : (config?.interestedInsightTypes ?? []),
   );
   const isLoading = configLoading || insightsLoading;
+  const networkError = configNetworkError || insightsNetworkError;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [queue, setQueue] = useState<any[]>([]);
   const [removed, setRemoved] = useState<any[]>([]);
   const [advancing, setAdvancing] = useState(false);
   const [expandedItem, setExpandedItem] = useState<any>(null);
-
   const [tutorialStep, setTutorialStep] = useState<number | null>(null);
 
   const insets = useSafeAreaInsets();
@@ -450,6 +461,14 @@ export default function HomeScreen() {
     } else {
       dismissTutorial();
     }
+  }
+
+  async function handleRetry() {
+    await Promise.all([reloadConfig(), reloadInsights()]);
+  }
+
+  if (networkError) {
+    return <NetworkErrorScreen onRetry={handleRetry} />;
   }
 
   if (isLoading) {
@@ -565,7 +584,6 @@ export default function HomeScreen() {
 
       <Sidebar visible={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Tutorial overlay */}
       {tutorialStep !== null && (
         <HomeTutorial
           step={tutorialStep}

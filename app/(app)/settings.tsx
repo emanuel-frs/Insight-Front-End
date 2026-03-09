@@ -12,10 +12,12 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { NetworkErrorScreen } from "../../src/components/NetworkErrorScreen";
 import { useLanguage } from "../../src/contexts/LanguageContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { useUserConfig } from "../../src/hooks/useUserConfig";
 import { TranslationKey } from "../../src/i18n/translations";
+import { isNetworkError } from "../../src/services/api";
 import {
   ALL_INSIGHT_TYPES,
   InsightTypeEnum,
@@ -41,6 +43,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { config, isLoading, updateConfig } = useUserConfig();
   const [saving, setSaving] = useState(false);
+  const [networkError, setNetworkError] = useState(false);
 
   const [selectedTypes, setSelectedTypes] = useState<InsightTypeEnum[]>([]);
   const [selectedTheme, setSelectedTheme] = useState<ThemeEnum>(
@@ -73,6 +76,7 @@ export default function SettingsScreen() {
 
   async function save() {
     setSaving(true);
+    setNetworkError(false);
     try {
       await updateConfig({
         interestedInsightTypes: selectedTypes,
@@ -81,9 +85,23 @@ export default function SettingsScreen() {
       });
       setLanguage(LANGUAGE_MAP[selectedLanguage]);
       router.replace("/(app)");
+    } catch (e) {
+      if (isNetworkError(e)) {
+        setNetworkError(true);
+      }
     } finally {
       setSaving(false);
     }
+  }
+
+  if (networkError) {
+    return (
+      <NetworkErrorScreen
+        onRetry={async () => {
+          setNetworkError(false);
+        }}
+      />
+    );
   }
 
   if (isLoading) {

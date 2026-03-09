@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import api from "../services/api";
+import { useCallback, useEffect, useState } from "react";
+import api, { isNetworkError } from "../services/api";
 
 const INSIGHT_TYPE_STR: Record<number, string> = {
   0: "Psicologia",
@@ -21,45 +21,47 @@ function shuffleArray<T>(arr: T[]): T[] {
   return shuffled;
 }
 
+async function fetchInsights(types: number[], excludeViewed: boolean) {
+  const typeParams =
+    types.length > 0
+      ? types.map((t) => `types=${INSIGHT_TYPE_STR[t]}`).join("&")
+      : "";
+  const excludeParam = excludeViewed ? "excludeViewed=true" : "";
+  const queryParts = [typeParams, excludeParam].filter(Boolean);
+  const query = queryParts.length > 0 ? "?" + queryParts.join("&") : "";
+  const res = await api.get(`/api/Insights${query}`);
+  return res.data.data ?? [];
+}
+
 export function useInsights(interestedTypes?: number[]) {
   const [insights, setInsights] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [networkError, setNetworkError] = useState(false);
 
-  async function fetchInsights(types: number[], excludeViewed: boolean) {
-    const typeParams =
-      types.length > 0
-        ? types.map((t) => `types=${INSIGHT_TYPE_STR[t]}`).join("&")
-        : "";
-    const excludeParam = excludeViewed ? "excludeViewed=true" : "";
-    const queryParts = [typeParams, excludeParam].filter(Boolean);
-    const query = queryParts.length > 0 ? "?" + queryParts.join("&") : "";
-    const res = await api.get(`/api/Insights${query}`);
-    return res.data.data ?? [];
-  }
-
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (interestedTypes === undefined) return;
-
-    const types = interestedTypes;
-
-    async function load() {
-      try {
-        let data = await fetchInsights(types, true);
-
-        if (data.length === 0) {
-          data = await fetchInsights(types, false);
-        }
-
-        setInsights(shuffleArray(data));
-      } catch (e) {
-        console.error("Erro ao buscar insights:", e);
-      } finally {
-        setIsLoading(false);
+    setIsLoading(true);
+    setNetworkError(false);
+    try {
+      let data = await fetchInsights(interestedTypes, true);
+      if (data.length === 0) {
+        data = await fetchInsights(interestedTypes, false);
       }
+      setInsights(shuffleArray(data));
+    } catch (e) {
+      if (isNetworkError(e)) {
+        setNetworkError(true);
+      } else {
+        console.error("[useInsights] Erro ao buscar insights:", e);
+      }
+    } finally {
+      setIsLoading(false);
     }
-
-    load();
   }, [JSON.stringify(interestedTypes)]);
 
-  return { insights, isLoading };
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return { insights, isLoading, networkError, reload: load };
 }

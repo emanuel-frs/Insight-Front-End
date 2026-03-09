@@ -2,29 +2,32 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { IoPersonCircle } from "react-icons/io5";
 import {
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { NetworkErrorScreen } from "../../src/components/NetworkErrorScreen";
 import { useLanguage } from "../../src/contexts/LanguageContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
+import { isNetworkError } from "../../src/services/api";
 import { UserProfile, userService } from "../../src/services/userService";
 
 export default function ProfileScreen() {
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [networkError, setNetworkError] = useState(false);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
@@ -35,12 +38,18 @@ export default function ProfileScreen() {
   }, []);
 
   async function load() {
+    setIsLoading(true);
+    setNetworkError(false);
     try {
       const data = await userService.getMe();
       setProfile(data);
       setName(data.name);
     } catch (e) {
-      console.error("[Profile] Erro ao carregar:", e);
+      if (isNetworkError(e)) {
+        setNetworkError(true);
+      } else {
+        console.error("[Profile] Erro ao carregar:", e);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -57,7 +66,11 @@ export default function ProfileScreen() {
       setName(updated.name);
       setSuccessMsg(t("profileSaved"));
     } catch (e) {
-      setErrorMsg(t("profileSaveError"));
+      if (isNetworkError(e)) {
+        setErrorMsg("Sem conexão com o servidor.");
+      } else {
+        setErrorMsg(t("profileSaveError"));
+      }
     } finally {
       setSaving(false);
     }
@@ -71,6 +84,10 @@ export default function ProfileScreen() {
         year: "numeric",
       })
     : "";
+
+  if (networkError) {
+    return <NetworkErrorScreen onRetry={load} />;
+  }
 
   if (isLoading) {
     return (
@@ -214,13 +231,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 8,
   },
-  profileName: {
-    fontSize: 22,
-    fontWeight: "700",
-  },
-  profileEmail: {
-    fontSize: 14,
-  },
+  profileName: { fontSize: 22, fontWeight: "700" },
+  profileEmail: { fontSize: 14 },
   infoSection: {
     flexDirection: "row",
     gap: 12,
@@ -238,15 +250,8 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
-  infoValue: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 12,
-  },
+  infoValue: { fontSize: 15, fontWeight: "600" },
+  sectionTitle: { fontSize: 18, fontWeight: "700", marginBottom: 12 },
   inputWrapper: {
     borderRadius: 14,
     borderWidth: 2,
@@ -254,21 +259,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     marginBottom: 8,
   },
-  input: {
-    fontSize: 16,
-  },
+  input: { fontSize: 16 },
   successMsg: {
     color: "#4CAF50",
     fontSize: 13,
     marginBottom: 16,
     marginLeft: 4,
   },
-  errorMsg: {
-    color: "#FF6B6B",
-    fontSize: 13,
-    marginBottom: 16,
-    marginLeft: 4,
-  },
+  errorMsg: { color: "#FF6B6B", fontSize: 13, marginBottom: 16, marginLeft: 4 },
   saveButton: {
     backgroundColor: "#6C63FF",
     borderRadius: 14,
@@ -276,9 +274,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 8,
   },
-  saveText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
+  saveText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 });

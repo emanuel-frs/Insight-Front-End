@@ -13,8 +13,10 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { NetworkErrorScreen } from "../../src/components/NetworkErrorScreen";
 import { useLanguage } from "../../src/contexts/LanguageContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
+import { isNetworkError } from "../../src/services/api";
 import {
   FavoriteInsight,
   favoriteService,
@@ -90,7 +92,6 @@ function FavoriteCard({
           style={[styles.cardImageWrapper, { backgroundColor: theme.card }]}
         >
           <Image source={image} style={styles.cardImage} resizeMode="cover" />
-          {/* Mesmo efeito de dessaturação do InsightCard */}
           <View style={styles.imageOverlay} />
           <LinearGradient
             colors={["transparent", theme.card]}
@@ -138,6 +139,7 @@ export default function FavoritesScreen() {
   const router = useRouter();
   const [favorites, setFavorites] = useState<FavoriteInsight[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [networkError, setNetworkError] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -147,11 +149,16 @@ export default function FavoritesScreen() {
 
   async function load() {
     setIsLoading(true);
+    setNetworkError(false);
     try {
       const data = await favoriteService.getAll();
       setFavorites(data);
     } catch (e) {
-      console.error("[Favorites] Erro ao carregar:", e);
+      if (isNetworkError(e)) {
+        setNetworkError(true);
+      } else {
+        console.error("[Favorites] Erro ao carregar:", e);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -166,9 +173,12 @@ export default function FavoritesScreen() {
     }
   }
 
+  if (networkError) {
+    return <NetworkErrorScreen onRetry={load} />;
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header — padrão igual a settings e profile */}
       <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
         <TouchableOpacity
           onPress={() => router.replace("/(app)")}
@@ -222,9 +232,7 @@ const styles = StyleSheet.create({
   back: { marginBottom: 16 },
   backText: { fontSize: 15 },
   title: { fontSize: 28, fontWeight: "700" },
-
   list: { paddingHorizontal: 20, paddingTop: 4, gap: 16 },
-
   card: {
     borderRadius: 16,
     borderWidth: 2,
